@@ -1,21 +1,125 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Matches all collections used by Grupo adote aqui
-    match /pets/{document} {
-      allow read, write: if true;
+    // 1. Global Safety Net - deny all by default
+    match /{document=**} {
+      allow read, write: if false;
     }
-    match /candidates/{document} {
-      allow read, write: if true;
+
+    // --- REUSABLE SECURITY HELPERS ---
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
-    match /temporary_homes/{document} {
-      allow read, write: if true;
+
+    function incoming() {
+      return request.resource.data;
     }
-    match /follow_ups/{document} {
-      allow read, write: if true;
+
+    // --- ENTITY SCHEMA VALIDATORS ---
+    function isValidPet(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.species is string && data.species.size() <= 50
+        && data.gender is string && data.gender.size() <= 20
+        && data.ageApprox is string && data.ageApprox.size() <= 50
+        && data.size is string && data.size.size() <= 30
+        && data.status is string && data.status.size() <= 30
+        && (!('color' in data) || (data.color is string && data.color.size() <= 50))
+        && (!('story' in data) || (data.story is string && data.story.size() <= 2000))
+        && (!('temperament' in data) || (data.temperament is string && data.temperament.size() <= 200))
+        && (!('castrated' in data) || data.castrated is bool)
+        && (!('vaccinated' in data) || data.vaccinated is bool)
+        && (!('dewormed' in data) || data.dewormed is bool)
+        && (!('needsTreatment' in data) || data.needsTreatment is bool)
+        && (!('treatmentNotes' in data) || (data.treatmentNotes is string && data.treatmentNotes.size() <= 1000))
+        && (!('compatOtherAnimals' in data) || (data.compatOtherAnimals is string && data.compatOtherAnimals.size() <= 100))
+        && (!('compatChildren' in data) || (data.compatChildren is string && data.compatChildren.size() <= 100))
+        && (!('specialNeeds' in data) || (data.specialNeeds is string && data.specialNeeds.size() <= 1000))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 100))
+        && (!('temporaryHomeId' in data) || (data.temporaryHomeId is string && data.temporaryHomeId.size() <= 128))
+        && (!('photos' in data) || (data.photos is list && data.photos.size() <= 50))
+        && (!('primaryPhotoIndex' in data) || data.primaryPhotoIndex is int)
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 20))
+        && (!('donorId' in data) || (data.donorId is string && data.donorId.size() <= 128));
     }
-    match /users/{document} {
-      allow read, write: if true;
+
+    function isValidCandidate(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.petId is string && data.petId.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.whatsapp is string && data.whatsapp.size() <= 30
+        && data.status is string && data.status.size() <= 30
+        && (!('city' in data) || (data.city is string && data.city.size() <= 100))
+        && (!('neighborhood' in data) || (data.neighborhood is string && data.neighborhood.size() <= 100))
+        && (!('housingType' in data) || (data.housingType is string && data.housingType.size() <= 50))
+        && (!('backyard' in data) || (data.backyard is string && data.backyard.size() <= 50))
+        && (!('tenure' in data) || (data.tenure is string && data.tenure.size() <= 50))
+        && (!('motivation' in data) || (data.motivation is string && data.motivation.size() <= 1000))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 20))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50))
+        && (!('internalNotes' in data) || (data.internalNotes is list && data.internalNotes.size() <= 100))
+        && (!('historyLogs' in data) || (data.historyLogs is list && data.historyLogs.size() <= 100));
+    }
+
+    function isValidTemporaryHome(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.contact is string && data.contact.size() <= 100
+        && data.vacancies is int
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && (!('donorId' in data) || (data.donorId is string && data.donorId.size() <= 128));
+    }
+
+    function isValidFollowUp(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.petId is string && data.petId.size() <= 128
+        && data.candidateId is string && data.candidateId.size() <= 128
+        && data.type is string && data.type.size() <= 50
+        && data.scheduledDate is string && data.scheduledDate.size() <= 50
+        && data.status is string && data.status.size() <= 30
+        && (!('photosReceived' in data) || (data.photosReceived is list && data.photosReceived.size() <= 50))
+        && (!('tutorNotes' in data) || (data.tutorNotes is string && data.tutorNotes.size() <= 1000))
+        && (!('adminNotes' in data) || (data.adminNotes is string && data.adminNotes.size() <= 1000))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
+    function isValidUser(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 150
+        && data.phone is string && data.phone.size() <= 30
+        && (!('password' in data) || (data.password is string && data.password.size() <= 100))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50))
+        && (!('role' in data) || (data.role is string && data.role.size() <= 30))
+        && (!('profilePhotoUrl' in data) || (data.profilePhotoUrl is string && data.profilePhotoUrl.size() <= 2000));
+    }
+
+    // --- COLLECTION RULE GROUPS ---
+
+    match /pets/{petId} {
+      allow read: if true;
+      allow write: if isValidId(petId) && isValidPet(incoming());
+    }
+
+    match /candidates/{candidateId} {
+      allow read: if true;
+      allow write: if isValidId(candidateId) && isValidCandidate(incoming());
+    }
+
+    match /temporary_homes/{homeId} {
+      allow read: if true;
+      allow write: if isValidId(homeId) && isValidTemporaryHome(incoming());
+    }
+
+    match /follow_ups/{followUpId} {
+      allow read: if true;
+      allow write: if isValidId(followUpId) && isValidFollowUp(incoming());
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId) && isValidUser(incoming());
     }
   }
 }
