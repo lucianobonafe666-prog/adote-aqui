@@ -1,0 +1,6 @@
+{
+  "name": "Gestão de Adoção de Pets",
+  "description": "Plataforma para gestão e acompanhamento de adoção de animais para protetores independentes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

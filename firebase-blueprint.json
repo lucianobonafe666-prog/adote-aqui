@@ -1,0 +1,134 @@
+{
+  "entities": {
+    "Pet": {
+      "title": "Pet",
+      "description": "An animal available for adoption or temporary home",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "species": { "type": "string" },
+        "gender": { "type": "string" },
+        "ageApprox": { "type": "string" },
+        "size": { "type": "string" },
+        "color": { "type": "string" },
+        "story": { "type": "string" },
+        "temperament": { "type": "string" },
+        "castrated": { "type": "boolean" },
+        "castrationDate": { "type": "string" },
+        "vaccinated": { "type": "boolean" },
+        "vaccineDates": { "type": "object" },
+        "dewormed": { "type": "boolean" },
+        "needsTreatment": { "type": "boolean" },
+        "treatmentNotes": { "type": "string" },
+        "compatOtherAnimals": { "type": "string" },
+        "compatChildren": { "type": "string" },
+        "specialNeeds": { "type": "string" },
+        "city": { "type": "string" },
+        "temporaryHomeId": { "type": "string" },
+        "photos": { "type": "array" },
+        "primaryPhotoIndex": { "type": "integer" },
+        "status": { "type": "string" },
+        "tags": { "type": "array" },
+        "historyEvents": { "type": "array" },
+        "donorId": { "type": "string" },
+        "donorInfo": { "type": "object" }
+      },
+      "required": ["id", "name", "species", "gender", "ageApprox", "size", "status"]
+    },
+    "Candidate": {
+      "title": "Candidate",
+      "description": "A candidate interested in adopting a pet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "petId": { "type": "string" },
+        "name": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "city": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "housingType": { "type": "string" },
+        "backyard": { "type": "string" },
+        "tenure": { "type": "string" },
+        "experience": { "type": "object" },
+        "motivation": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string" },
+        "tags": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "internalNotes": { "type": "array" },
+        "historyLogs": { "type": "array" }
+      },
+      "required": ["id", "petId", "name", "whatsapp", "status"]
+    },
+    "TemporaryHome": {
+      "title": "TemporaryHome",
+      "description": "A temporary home hosting pets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contact": { "type": "string" },
+        "vacancies": { "type": "integer" },
+        "notes": { "type": "string" },
+        "donorId": { "type": "string" }
+      },
+      "required": ["id", "name", "contact", "vacancies"]
+    },
+    "FollowUp": {
+      "title": "FollowUp",
+      "description": "A follow-up record for a pet after adoption",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "petId": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "type": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "status": { "type": "string" },
+        "photosReceived": { "type": "array" },
+        "tutorNotes": { "type": "string" },
+        "adminNotes": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "petId", "candidateId", "type", "scheduledDate", "status"]
+    },
+    "DonorUser": {
+      "title": "DonorUser",
+      "description": "A user in the system (donor, adopter, candidate, or both)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "password": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "phone"]
+    }
+  },
+  "firestore": {
+    "pets": {
+      "schema": "Pet",
+      "description": "Pets collection"
+    },
+    "candidates": {
+      "schema": "Candidate",
+      "description": "Adoption candidates"
+    },
+    "temporary_homes": {
+      "schema": "TemporaryHome",
+      "description": "Temporary homes for animals"
+    },
+    "follow_ups": {
+      "schema": "FollowUp",
+      "description": "Follow-ups after adoption"
+    },
+    "users": {
+      "schema": "DonorUser",
+      "description": "Registered users"
+    }
+  }
+}

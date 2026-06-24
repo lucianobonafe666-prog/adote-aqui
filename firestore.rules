@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Matches all collections used by Grupo adote aqui
+    match /pets/{document} {
+      allow read, write: if true;
+    }
+    match /candidates/{document} {
+      allow read, write: if true;
+    }
+    match /temporary_homes/{document} {
+      allow read, write: if true;
+    }
+    match /follow_ups/{document} {
+      allow read, write: if true;
+    }
+    match /users/{document} {
+      allow read, write: if true;
+    }
+  }
+}
