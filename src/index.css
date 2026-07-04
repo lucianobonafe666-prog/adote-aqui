@@ -66,4 +66,22 @@ body {
   color: #333333;
 }
 
+/* All profile and pet gallery images should show a zoom-in cursor on hover */
+img.object-cover, 
+img.rounded-xl, 
+img.rounded-2xl, 
+img.rounded-full, 
+img.rounded-lg {
+  cursor: zoom-in;
+  transition: opacity 0.2s ease-in-out;
+}
+img.object-cover:hover, 
+img.rounded-xl:hover, 
+img.rounded-2xl:hover, 
+img.rounded-full:hover, 
+img.rounded-lg:hover {
+  opacity: 0.92;
+}
+
+
 

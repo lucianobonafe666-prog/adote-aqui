@@ -104,7 +104,11 @@
         "phone": { "type": "string" },
         "password": { "type": "string" },
         "createdAt": { "type": "string" },
-        "role": { "type": "string" }
+        "role": { "type": "string" },
+        "profilePhotoUrl": { "type": "string" },
+        "customTags": { "type": "array" },
+        "adminDescription": { "type": "string" },
+        "flaggedAttention": { "type": "boolean" }
       },
       "required": ["id", "name", "email", "phone"]
     }

@@ -7,12 +7,28 @@ service cloud.firestore {
     }
 
     // --- REUSABLE SECURITY HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (request.auth.token.email == 'franciele@teste' || request.auth.token.email == 'franciele@teste.com');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
       return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
     }
 
     // --- ENTITY SCHEMA VALIDATORS ---
@@ -92,34 +108,53 @@ service cloud.firestore {
         && (!('password' in data) || (data.password is string && data.password.size() <= 100))
         && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50))
         && (!('role' in data) || (data.role is string && data.role.size() <= 30))
-        && (!('profilePhotoUrl' in data) || (data.profilePhotoUrl is string && data.profilePhotoUrl.size() <= 2000));
+        && (!('profilePhotoUrl' in data) || (data.profilePhotoUrl is string && data.profilePhotoUrl.size() <= 2000))
+        && (!('customTags' in data) || (data.customTags is list && data.customTags.size() <= 100))
+        && (!('adminDescription' in data) || (data.adminDescription is string && data.adminDescription.size() <= 1000))
+        && (!('flaggedAttention' in data) || data.flaggedAttention is bool)
+        && (!('city' in data) || (data.city is string && data.city.size() <= 100))
+        && (!('neighborhood' in data) || (data.neighborhood is string && data.neighborhood.size() <= 100))
+        && (!('housingType' in data) || (data.housingType is string && data.housingType.size() <= 50))
+        && (!('backyard' in data) || (data.backyard is string && data.backyard.size() <= 50))
+        && (!('tenure' in data) || (data.tenure is string && data.tenure.size() <= 50));
     }
 
     // --- COLLECTION RULE GROUPS ---
 
     match /pets/{petId} {
       allow read: if true;
-      allow write: if isValidId(petId) && isValidPet(incoming());
+      allow create: if isSignedIn() && isValidId(petId) && isValidPet(incoming()) && (incoming().donorId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(petId) && isValidPet(incoming()) && (existing().donorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isValidId(petId) && (existing().donorId == request.auth.uid || isAdmin());
     }
 
     match /candidates/{candidateId} {
-      allow read: if true;
-      allow write: if isValidId(candidateId) && isValidCandidate(incoming());
+      // Allowed for public application creation
+      allow create: if isValidId(candidateId) && isValidCandidate(incoming());
+      // Admins and owners can read or write candidates
+      allow read, update, delete: if isAdmin() || (isSignedIn() && (existing().email == request.auth.token.email || incoming().email == request.auth.token.email));
     }
 
     match /temporary_homes/{homeId} {
       allow read: if true;
-      allow write: if isValidId(homeId) && isValidTemporaryHome(incoming());
+      allow create: if isSignedIn() && isValidId(homeId) && isValidTemporaryHome(incoming()) && (incoming().donorId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(homeId) && isValidTemporaryHome(incoming()) && (existing().donorId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isValidId(homeId) && (existing().donorId == request.auth.uid || isAdmin());
     }
 
     match /follow_ups/{followUpId} {
-      allow read: if true;
-      allow write: if isValidId(followUpId) && isValidFollowUp(incoming());
+      allow read: if isAdmin() || (isSignedIn() && (resource == null || resource.data.candidateId == request.auth.uid));
+      allow create: if isSignedIn() && isValidId(followUpId) && isValidFollowUp(incoming()) && (incoming().candidateId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && isValidId(followUpId) && isValidFollowUp(incoming()) && (existing().candidateId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {
+      // Anyone can read a user profile (e.g. for donorInfo)
       allow read: if true;
-      allow write: if isValidId(userId) && isValidUser(incoming());
+      // Users can manage their own profiles, admins can manage everything
+      allow create, update: if isValidId(userId) && isValidUser(incoming()) && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
     }
   }
 }

@@ -32,9 +32,10 @@ interface PublicAreaProps {
     password?: string;
     role?: 'Doador' | 'Pretendente' | 'Ambos';
     profilePhotoUrl?: string;
-  }) => DonorUser;
-  onLoginUser: (email: string, password?: string) => DonorUser | null;
+  }) => Promise<DonorUser>;
+  onLoginUser: (email: string, password?: string) => Promise<DonorUser | null>;
   onLogoutUser: () => void;
+  onLoginWithGoogle?: () => Promise<DonorUser | null>;
   onAddPet: (pet: Omit<Pet, 'id' | 'historyEvents' | 'tags'> & { tags?: string[] }) => void;
   onUpdateUserProfile?: (updatedFields: Partial<DonorUser>) => void;
   onRegisterTemporaryHome?: (ltData: Omit<TemporaryHome, 'id' | 'donorId'>) => void;
@@ -54,6 +55,7 @@ export default function PublicArea({
   onRegisterUser,
   onLoginUser,
   onLogoutUser,
+  onLoginWithGoogle,
   onAddPet,
   onUpdateUserProfile,
   onRegisterTemporaryHome,
@@ -68,7 +70,6 @@ export default function PublicArea({
   const [species, setSpecies] = useState<string>('all');
   const [gender, setGender] = useState<string>('all');
   const [size, setSize] = useState<string>('all');
-  const [ageGroup, setAgeGroup] = useState<string>('all');
   const [city, setCity] = useState<string>('all');
 
   // Sub-Tab State
@@ -301,17 +302,7 @@ export default function PublicArea({
     const matchesSize = size === 'all' || pet.size === size;
     const matchesCity = city === 'all' || pet.city === city;
     
-    let matchesAge = true;
-    if (ageGroup !== 'all') {
-      const isPuppy = pet.ageApprox.toLowerCase().includes('filhote');
-      if (ageGroup === 'filhote') {
-        matchesAge = isPuppy;
-      } else {
-        matchesAge = !isPuppy;
-      }
-    }
-
-    return matchesSearch && matchesSpecies && matchesGender && matchesSize && matchesCity && matchesAge;
+    return matchesSearch && matchesSpecies && matchesGender && matchesSize && matchesCity;
   });
 
   const handleOpenDetails = (pet: Pet) => {
@@ -401,41 +392,65 @@ export default function PublicArea({
     resetForm();
   };
 
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const translateAuthError = (err: any): string => {
+    const code = err?.code || '';
+    if (code.includes('email-already-in-use')) {
+      return 'Este e-mail já está cadastrado. Tente fazer login.';
+    }
+    if (code.includes('weak-password')) {
+      return 'A senha deve conter pelo menos 6 caracteres.';
+    }
+    if (code.includes('invalid-email') || code.includes('invalid-credential')) {
+      return 'E-mail ou credenciais inválidas.';
+    }
+    if (code.includes('user-not-found') || code.includes('wrong-password')) {
+      return 'E-mail ou senha incorretos.';
+    }
+    if (code.includes('popup-closed-by-user')) {
+      return 'A janela de autenticação foi fechada antes de concluir o login.';
+    }
+    return err?.message || 'Ocorreu um erro desconhecido durante o acesso.';
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
 
-    if (authMode === 'register') {
-      if (!authName || !authEmail || !authPhone) {
-        setAuthError('Todos os campos obrigatórios devem ser preenchidos.');
-        return;
-      }
-      onRegisterUser({
-        name: authName,
-        email: authEmail,
-        phone: authPhone,
-        password: authPassword,
-        role: authRole,
-        profilePhotoUrl: authProfilePhotoUrl
-      });
-      // Clear
-      setAuthName('');
-      setAuthEmail('');
-      setAuthPhone('');
-      setAuthPassword('');
-      setAuthProfilePhotoUrl('');
-    } else {
-      if (!authEmail) {
-        setAuthError('Por favor, informe seu e-mail.');
-        return;
-      }
-      const user = onLoginUser(authEmail, authPassword);
-      if (!user) {
-        setAuthError('Usuário não encontrado ou senha inválida.');
-      } else {
+    try {
+      if (authMode === 'register') {
+        if (!authName || !authEmail || !authPhone) {
+          setAuthError('Todos os campos obrigatórios devem ser preenchidos.');
+          return;
+        }
+        await onRegisterUser({
+          name: authName,
+          email: authEmail,
+          phone: authPhone,
+          password: authPassword,
+          role: authRole,
+          profilePhotoUrl: authProfilePhotoUrl
+        });
+        // Clear
+        setAuthName('');
         setAuthEmail('');
+        setAuthPhone('');
         setAuthPassword('');
+        setAuthProfilePhotoUrl('');
+      } else {
+        if (!authEmail) {
+          setAuthError('Por favor, informe seu e-mail.');
+          return;
+        }
+        const user = await onLoginUser(authEmail, authPassword);
+        if (!user) {
+          setAuthError('Usuário não encontrado ou senha inválida.');
+        } else {
+          setAuthEmail('');
+          setAuthPassword('');
+        }
       }
+    } catch (err: any) {
+      setAuthError(translateAuthError(err));
     }
   };
 
@@ -624,8 +639,28 @@ export default function PublicArea({
           </div>
           
           {currentUser && (
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-slate-600 font-medium hidden sm:inline">Conectado como <strong>{currentUser.name}</strong></span>
+            <div className="flex flex-wrap items-center gap-3 text-xs py-1">
+              <span className="text-slate-600 font-medium hidden md:inline">
+                Olá, <strong>{currentUser.name}</strong>
+              </span>
+              
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-medium">Perfil:</span>
+                <select
+                  value={currentUser.role || 'Pretendente'}
+                  onChange={(e) => {
+                    if (onUpdateUserProfile) {
+                      onUpdateUserProfile({ role: e.target.value as 'Doador' | 'Pretendente' | 'Ambos' });
+                    }
+                  }}
+                  className="px-2 py-1 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-[#5A6340] text-[11px] font-semibold text-slate-700 cursor-pointer shadow-sm"
+                >
+                  <option value="Pretendente">Pretendente (Adotante)</option>
+                  <option value="Doador">Doador / Protetor</option>
+                  <option value="Ambos">Ambos (Doador e Pretendente)</option>
+                </select>
+              </div>
+
               <button
                 onClick={onLogoutUser}
                 className="text-[#D48166] hover:text-[#BD6E55] font-bold underline cursor-pointer"
@@ -651,9 +686,9 @@ export default function PublicArea({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="flex flex-col gap-4">
             {/* Search Input */}
-            <div className="col-span-1 sm:col-span-2 lg:col-span-2 relative">
+            <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
@@ -664,86 +699,163 @@ export default function PublicArea({
               />
             </div>
 
-            {/* Espécie */}
-            <div>
-              <select
-                value={species}
-                onChange={(e) => setSpecies(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
-              >
-                <option value="all">Todas Espécies</option>
-                <option value="Cachorro">Cachorro</option>
-                <option value="Gato">Gato</option>
-              </select>
-            </div>
+            {/* Quick Filter Badges / Tag Filters */}
+            <div className="flex flex-col gap-3.5 pt-4 border-t border-slate-100">
+              {/* Espécie */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[70px]">Espécie:</span>
+                <button
+                  type="button"
+                  onClick={() => setSpecies('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    species === 'all' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpecies('Cachorro')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    species === 'Cachorro' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Cachorro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpecies('Gato')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    species === 'Gato' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Gato
+                </button>
+              </div>
 
-            {/* Sexo */}
-            <div>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
-              >
-                <option value="all">Qualquer Sexo</option>
-                <option value="Macho">Macho</option>
-                <option value="Fêmea">Fêmea</option>
-              </select>
-            </div>
+              {/* Sexo */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[70px]">Sexo:</span>
+                <button
+                  type="button"
+                  onClick={() => setGender('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    gender === 'all' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGender('Macho')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    gender === 'Macho' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Macho
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGender('Fêmea')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    gender === 'Fêmea' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Fêmea
+                </button>
+              </div>
 
-            {/* Idade */}
-            <div>
-              <select
-                value={ageGroup}
-                onChange={(e) => setAgeGroup(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
-              >
-                <option value="all">Todas as Idades</option>
-                <option value="filhote">Filhote</option>
-                <option value="adulto">Adulto / Idoso</option>
-              </select>
-            </div>
+              {/* Porte */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[70px]">Porte:</span>
+                <button
+                  type="button"
+                  onClick={() => setSize('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    size === 'all' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSize('Pequeno')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    size === 'Pequeno' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Pequeno
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSize('Médio')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    size === 'Médio' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Médio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSize('Grande')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    size === 'Grande' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Grande
+                </button>
+              </div>
 
-            {/* Porte */}
-            <div>
-              <select
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
-              >
-                <option value="all">Todos os Portes</option>
-                <option value="Pequeno">Pequeno porte</option>
-                <option value="Médio">Médio porte</option>
-                <option value="Grande">Grande porte</option>
-              </select>
+              {/* Cidades */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[70px]">Cidades:</span>
+                <button
+                  type="button"
+                  onClick={() => setCity('all')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                    city === 'all' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todas
+                </button>
+                {cities.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCity(c)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                      city === c 
+                        ? 'bg-emerald-600 text-white shadow-sm' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-
-          {/* Quick Filter Badges / City Filter */}
-          <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cidades:</span>
-            <button
-              onClick={() => setCity('all')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                city === 'all' 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Todas
-            </button>
-            {cities.map(c => (
-              <button
-                key={c}
-                onClick={() => setCity(c)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  city === c 
-                    ? 'bg-emerald-600 text-white' 
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
           </div>
         </div>
 
@@ -859,7 +971,6 @@ export default function PublicArea({
                   setSpecies('all');
                   setGender('all');
                   setSize('all');
-                  setAgeGroup('all');
                   setCity('all');
                 }}
                 className="mt-5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
@@ -1083,6 +1194,32 @@ export default function PublicArea({
                 </button>
               </form>
 
+              <div className="relative my-5 flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-4 text-slate-400 text-[10px] uppercase font-bold tracking-wider">Ou acesse com</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (onLoginWithGoogle) {
+                      try {
+                        setAuthError(null);
+                        await onLoginWithGoogle();
+                      } catch (err: any) {
+                        setAuthError(translateAuthError(err));
+                      }
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-700 cursor-pointer bg-white shadow-sm w-full"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                  Conectar com Google
+                </button>
+              </div>
+
               <div className="mt-6 text-center text-xs">
                 {authMode === 'login' ? (
                   <p className="text-slate-500">
@@ -1131,9 +1268,28 @@ export default function PublicArea({
                     />
                   )}
                   <div>
-                    <span className="text-[10px] text-[#5A6340] uppercase font-bold tracking-wider">
-                      {currentUser.role === 'Ambos' ? 'Portal do Doador e Adotante' : currentUser.role === 'Pretendente' ? 'Portal do Adotante (Pretendente)' : 'Portal do Doador / Protetor'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="text-[10px] text-[#5A6340] uppercase font-bold tracking-wider">
+                        {currentUser.role === 'Ambos' ? 'Portal do Doador e Adotante' : currentUser.role === 'Pretendente' ? 'Portal do Adotante (Pretendente)' : 'Portal do Doador / Protetor'}
+                      </span>
+                      <span className="text-slate-400 text-[10px] hidden sm:inline">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-slate-500 font-medium">Alterar perfil:</span>
+                        <select
+                          value={currentUser.role || 'Pretendente'}
+                          onChange={(e) => {
+                            if (onUpdateUserProfile) {
+                              onUpdateUserProfile({ role: e.target.value as 'Doador' | 'Pretendente' | 'Ambos' });
+                            }
+                          }}
+                          className="px-1.5 py-0.5 rounded border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#5A6340] text-[10px] font-semibold text-slate-700 cursor-pointer shadow-sm"
+                        >
+                          <option value="Pretendente">Pretendente (Adotante)</option>
+                          <option value="Doador">Doador / Protetor</option>
+                          <option value="Ambos">Ambos (Doador e Pretendente)</option>
+                        </select>
+                      </div>
+                    </div>
                     <h2 className="text-xl font-bold text-slate-900 mt-0.5 font-display">Olá, {currentUser.name}!</h2>
                     <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                       {currentUser.role === 'Pretendente'

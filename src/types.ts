@@ -63,6 +63,8 @@ export interface DonorUser {
   role?: 'Doador' | 'Pretendente' | 'Ambos';
   profilePhotoUrl?: string;
   customTags?: string[];
+  adminDescription?: string;
+  flaggedAttention?: boolean;
   // Pretendente profile details
   city?: string;
   neighborhood?: string;

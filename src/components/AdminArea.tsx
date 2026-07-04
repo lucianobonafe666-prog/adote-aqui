@@ -83,6 +83,9 @@ export default function AdminArea({
     };
   });
   const allTemporaryHomes = [...temporaryHomes, ...userTemporaryHomes];
+  const allUserTags = Array.from(
+    new Set((users || []).flatMap(u => u.customTags || []))
+  );
 
   // Tabs: 'dashboard' | 'pets' | 'candidates' | 'lts' | 'followups' | 'reports' | 'backup'
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -93,6 +96,10 @@ export default function AdminArea({
   const [followUpFilter, setFollowUpFilter] = useState<'all' | 'Pendente' | 'Concluído'>('Pendente');
   const [userSearch, setUserSearch] = useState('');
   const [userTagInput, setUserTagInput] = useState<{[userId: string]: string}>({});
+  const [selectedUserTagFilter, setSelectedUserTagFilter] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [userAdminDescInput, setUserAdminDescInput] = useState('');
+  const [userAttentionInput, setUserAttentionInput] = useState(false);
 
   // Selection / Detail States
   const [editingPet, setEditingPet] = useState<Pet | null>(null);
@@ -101,6 +108,8 @@ export default function AdminArea({
   const [isAddingLT, setIsAddingLT] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [activeFollowUpEdit, setActiveFollowUpEdit] = useState<FollowUp | null>(null);
+  const [selectedPetDetail, setSelectedPetDetail] = useState<Pet | null>(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<DonorUser | null>(null);
 
   // Private Note Text Input State
   const [newPrivateNote, setNewPrivateNote] = useState('');
@@ -481,6 +490,32 @@ export default function AdminArea({
       return u;
     });
     onUpdateUsers(updatedUsers);
+  };
+
+  const toggleExpandUser = (user: DonorUser) => {
+    if (expandedUserId === user.id) {
+      setExpandedUserId(null);
+    } else {
+      setExpandedUserId(user.id);
+      setUserAdminDescInput(user.adminDescription || '');
+      setUserAttentionInput(!!user.flaggedAttention);
+    }
+  };
+
+  const handleSaveAdminUserFields = (userId: string) => {
+    if (!onUpdateUsers) return;
+    const updatedUsers = users.map(u => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          adminDescription: userAdminDescInput.substring(0, 500),
+          flaggedAttention: userAttentionInput
+        };
+      }
+      return u;
+    });
+    onUpdateUsers(updatedUsers);
+    setExpandedUserId(null);
   };
 
   /* --- CADIDATE STATUS ACTIONS & PRIVATE NOTES --- */
@@ -1398,10 +1433,16 @@ export default function AdminArea({
                                 src={pet.photos[0] || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=100'} 
                                 alt="" 
                                 referrerPolicy="no-referrer"
-                                className="w-10 h-10 rounded-xl object-cover border border-slate-200" 
+                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 cursor-pointer hover:scale-105 transition-transform duration-200" 
+                                onClick={() => setSelectedPetDetail(pet)}
                               />
                               <div>
-                                <h4 className="font-bold text-slate-950 text-sm leading-none mb-1">{pet.name}</h4>
+                                <h4 
+                                  className="font-bold text-slate-950 text-sm leading-none mb-1 cursor-pointer hover:text-[#5A6340] hover:underline"
+                                  onClick={() => setSelectedPetDetail(pet)}
+                                >
+                                  {pet.name}
+                                </h4>
                                 <span className="text-[10px] text-slate-400 font-mono">{pet.ageApprox} • Porte {pet.size}</span>
                               </div>
                             </div>
@@ -1497,7 +1538,8 @@ export default function AdminArea({
                       <img
                         src={pet.photos[0] || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=600'}
                         alt={pet.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                        onClick={() => setSelectedPetDetail(pet)}
                       />
                     </div>
 
@@ -1505,7 +1547,12 @@ export default function AdminArea({
                     <div className="flex-1 space-y-4">
                       <div>
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-xl font-bold text-slate-900">{pet.name}</h3>
+                          <h3 
+                            className="text-xl font-bold text-slate-900 cursor-pointer hover:text-[#5A6340] hover:underline"
+                            onClick={() => setSelectedPetDetail(pet)}
+                          >
+                            {pet.name}
+                          </h3>
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                             Aguardando Aprovação
                           </span>
@@ -2063,6 +2110,43 @@ export default function AdminArea({
               </div>
             </div>
 
+            {/* Tag filtering row */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-wrap gap-2.5 items-center bg-slate-50/50 shadow-sm">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 flex items-center gap-1">
+                Filtrar por Tag:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserTagFilter(null)}
+                  className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                    selectedUserTagFilter === null
+                      ? 'bg-[#5A6340] text-white border border-[#5A6340] shadow-sm'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Todas ({users.length})
+                </button>
+                {allUserTags.map(tag => {
+                  const count = users.filter(u => u.customTags && u.customTags.includes(tag)).length;
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setSelectedUserTagFilter(tag)}
+                      className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                        selectedUserTagFilter === tag
+                          ? 'bg-[#5A6340] text-white border border-[#5A6340] shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {tag} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
@@ -2072,6 +2156,7 @@ export default function AdminArea({
                       <th className="p-4">Papel</th>
                       <th className="p-4">Lar Temporário</th>
                       <th className="p-4">Tags Personalizadas</th>
+                      <th className="p-4">Ações</th>
                       <th className="p-4 text-right">Adicionar Tag</th>
                     </tr>
                   </thead>
@@ -2079,106 +2164,220 @@ export default function AdminArea({
                     {(users || [])
                       .filter(u => {
                         const s = userSearch.toLowerCase();
-                        return (
+                        const matchesSearch = (
                           u.name.toLowerCase().includes(s) ||
                           u.email.toLowerCase().includes(s) ||
                           (u.phone && u.phone.includes(s)) ||
                           (u.customTags && u.customTags.some(t => t.toLowerCase().includes(s)))
                         );
+                        const matchesTag = selectedUserTagFilter
+                          ? (u.customTags && u.customTags.includes(selectedUserTagFilter))
+                          : true;
+                        return matchesSearch && matchesTag;
                       })
                       .map(u => {
                         const hasSubmittedPet = pets.some(p => p.donorId === u.id);
                         const userTags = u.customTags || [];
                         return (
-                          <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-[#5A6340]/10 text-[#5A6340] font-bold flex items-center justify-center text-sm">
-                                  {u.name.substring(0, 2).toUpperCase()}
-                                </div>
-                                <div>
-                                  <span className="font-bold text-slate-900 block">{u.name}</span>
-                                  <span className="text-slate-400 text-[10px] block font-mono">{u.email}</span>
-                                  {u.phone && <span className="text-slate-500 text-[10px] block font-mono">{u.phone}</span>}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                u.role === 'Ambos'
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : u.role === 'Doador'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-teal-100 text-teal-800'
-                              }`}>
-                                {u.role || 'Doador'}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              {hasSubmittedPet ? (
-                                <div className="space-y-1">
-                                  <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded text-[10px] font-semibold">
-                                    Sim (Doador Ativo)
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 block italic">
-                                    Tratado como LT automatico
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 italic">Não ativo</span>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex flex-wrap gap-1.5 max-w-xs">
-                                {userTags.map(tag => (
-                                  <span key={tag} className="inline-flex items-center gap-1 bg-[#5A6340]/10 text-[#5A6340] px-2 py-0.5 rounded-md font-medium text-[10px]">
-                                    {tag}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveUserTag(u.id, tag)}
-                                      className="hover:bg-red-100 hover:text-red-600 rounded px-1 text-[11px] leading-none transition-colors"
-                                      title="Remover Tag"
+                          <React.Fragment key={u.id}>
+                            <tr className={`hover:bg-slate-50/50 transition-colors ${expandedUserId === u.id ? 'bg-slate-50' : ''}`}>
+                              <td className="p-4">
+                                <div className="flex items-center gap-3">
+                                  {u.profilePhotoUrl ? (
+                                    <img 
+                                      src={u.profilePhotoUrl} 
+                                      alt="" 
+                                      referrerPolicy="no-referrer"
+                                      className="w-9 h-9 rounded-xl object-cover border border-slate-200 cursor-pointer hover:scale-105 transition-transform duration-200"
+                                      onClick={() => setSelectedUserDetail(u)}
+                                    />
+                                  ) : (
+                                    <div 
+                                      className="w-9 h-9 rounded-xl bg-[#5A6340]/10 text-[#5A6340] font-bold flex items-center justify-center text-sm cursor-pointer hover:bg-[#5A6340]/20 transition-colors"
+                                      onClick={() => setSelectedUserDetail(u)}
                                     >
-                                      &times;
-                                    </button>
-                                  </span>
-                                ))}
-                                {userTags.length === 0 && (
-                                  <span className="text-slate-400 italic text-[11px]">Nenhuma tag</span>
+                                      {u.name.substring(0, 2).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span 
+                                        className="font-bold text-slate-900 cursor-pointer hover:text-[#5A6340] hover:underline"
+                                        onClick={() => setSelectedUserDetail(u)}
+                                      >
+                                        {u.name}
+                                      </span>
+                                      {u.flaggedAttention && (
+                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                                          <AlertCircle className="w-2.5 h-2.5" /> Atenção
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-slate-400 text-[10px] block font-mono">{u.email}</span>
+                                    {u.phone && <span className="text-slate-500 text-[10px] block font-mono">{u.phone}</span>}
+                                    {u.adminDescription && (
+                                      <span className="text-indigo-600 font-medium text-[10px] block mt-0.5 truncate max-w-xs" title={u.adminDescription}>
+                                        📝 {u.adminDescription}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  u.role === 'Ambos'
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : u.role === 'Doador'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-teal-100 text-teal-800'
+                                }`}>
+                                  {u.role || 'Doador'}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                {hasSubmittedPet ? (
+                                  <div className="space-y-1">
+                                    <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded text-[10px] font-semibold">
+                                      Sim (Doador Ativo)
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 block italic">
+                                      Tratado como LT automático
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 italic">Não ativo</span>
                                 )}
-                              </div>
-                            </td>
-                            <td className="p-4 text-right">
-                              <form
-                                onSubmit={e => {
-                                  e.preventDefault();
-                                  const text = userTagInput[u.id] || '';
-                                  handleAddUserTag(u.id, text);
-                                }}
-                                className="flex items-center justify-end gap-1.5"
-                              >
-                                <input
-                                  type="text"
-                                  placeholder="Nova tag..."
-                                  value={userTagInput[u.id] || ''}
-                                  onChange={e => setUserTagInput(prev => ({ ...prev, [u.id]: e.target.value }))}
-                                  className="px-2 py-1 border border-slate-200 rounded-lg text-xs w-24 focus:outline-none focus:ring-1 focus:ring-[#5A6340]"
-                                />
+                              </td>
+                              <td className="p-4">
+                                <div className="flex flex-wrap gap-1.5 max-w-xs">
+                                  {userTags.map(tag => (
+                                    <span key={tag} className="inline-flex items-center gap-1 bg-[#5A6340]/10 text-[#5A6340] px-2 py-0.5 rounded-md font-medium text-[10px]">
+                                      {tag}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveUserTag(u.id, tag)}
+                                        className="hover:bg-red-100 hover:text-red-600 rounded px-1 text-[11px] leading-none transition-colors cursor-pointer"
+                                        title="Remover Tag"
+                                      >
+                                        &times;
+                                      </button>
+                                    </span>
+                                  ))}
+                                  {userTags.length === 0 && (
+                                    <span className="text-slate-400 italic text-[11px]">Nenhuma tag</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4">
                                 <button
-                                  type="submit"
-                                  className="p-1 bg-[#5A6340] hover:bg-[#4E5637] text-white rounded-lg transition-colors"
-                                  title="Adicionar Tag"
+                                  type="button"
+                                  onClick={() => toggleExpandUser(u)}
+                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
                                 >
-                                  <Plus className="w-3.5 h-3.5" />
+                                  {expandedUserId === u.id ? 'Fechar' : 'Admin Painel'}
+                                  <Edit2 className="w-3 h-3 text-slate-500" />
                                 </button>
-                              </form>
-                            </td>
-                          </tr>
+                              </td>
+                              <td className="p-4 text-right">
+                                <form
+                                  onSubmit={e => {
+                                    e.preventDefault();
+                                    const text = userTagInput[u.id] || '';
+                                    handleAddUserTag(u.id, text);
+                                  }}
+                                  className="flex items-center justify-end gap-1.5"
+                                >
+                                  <input
+                                    type="text"
+                                    placeholder="Nova tag..."
+                                    value={userTagInput[u.id] || ''}
+                                    onChange={e => setUserTagInput(prev => ({ ...prev, [u.id]: e.target.value }))}
+                                    className="px-2 py-1 border border-slate-200 rounded-lg text-xs w-24 focus:outline-none focus:ring-1 focus:ring-[#5A6340]"
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="p-1 bg-[#5A6340] hover:bg-[#4E5637] text-white rounded-lg transition-colors cursor-pointer"
+                                    title="Adicionar Tag"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                </form>
+                              </td>
+                            </tr>
+
+                            {/* Private admin section row expansion */}
+                            {expandedUserId === u.id && (
+                              <tr className="bg-slate-50/80">
+                                <td colSpan={6} className="p-4 border-t border-b border-slate-200">
+                                  <div className="space-y-4 max-w-2xl bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <h4 className="text-xs font-bold text-[#5A6340] uppercase tracking-wider flex items-center gap-1.5">
+                                      <Shield className="w-4 h-4 text-[#5A6340]" /> Painel Interno do Usuário (Apenas Administração)
+                                    </h4>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div className="space-y-1.5">
+                                        <label className="block text-xs font-bold text-slate-600">
+                                          Descrição Personalizada (Max 500 caracteres)
+                                        </label>
+                                        <textarea
+                                          maxLength={500}
+                                          rows={4}
+                                          value={userAdminDescInput}
+                                          onChange={e => setUserAdminDescInput(e.target.value)}
+                                          placeholder="Escreva observações particulares, observações de visitas ou histórico deste usuário..."
+                                          className="w-full p-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#5A6340] font-sans"
+                                        />
+                                        <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
+                                          <span>Apenas visível pela administração</span>
+                                          <span>{userAdminDescInput.length}/500</span>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-3 flex flex-col justify-between">
+                                        <div className="p-3 bg-red-50/50 rounded-lg border border-red-100 flex items-start gap-2.5">
+                                          <input
+                                            type="checkbox"
+                                            id={`attention-${u.id}`}
+                                            checked={userAttentionInput}
+                                            onChange={e => setUserAttentionInput(e.target.checked)}
+                                            className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300 mt-0.5 cursor-pointer"
+                                          />
+                                          <label htmlFor={`attention-${u.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                                            <span className="block font-bold text-red-900 mb-0.5 flex items-center gap-1">
+                                              <AlertCircle className="w-3.5 h-3.5 text-red-600" /> Marcar como "Atenção"
+                                            </span>
+                                            Sinaliza que este usuário necessita de cuidado especial ou observação na avaliação de adoções futuras.
+                                          </label>
+                                        </div>
+
+                                        <div className="flex justify-end gap-2 pt-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => setExpandedUserId(null)}
+                                            className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50 cursor-pointer"
+                                          >
+                                            Cancelar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSaveAdminUserFields(u.id)}
+                                            className="px-4 py-1.5 bg-[#5A6340] hover:bg-[#4E5637] text-white rounded-lg text-xs font-bold cursor-pointer"
+                                          >
+                                            Salvar Alterações
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     {(users || []).length === 0 && (
                       <tr>
-                        <td colSpan={5} className="text-center py-8 text-slate-400">
+                        <td colSpan={6} className="text-center py-8 text-slate-400">
                           Nenhum usuário cadastrado no sistema.
                         </td>
                       </tr>
@@ -2597,6 +2796,442 @@ export default function AdminArea({
         )}
 
       </main>
+
+      {/* PET DETAIL MODAL FOR ADMINS */}
+      <AnimatePresence>
+        {selectedPetDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-150 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <Dog className="w-5 h-5 text-[#5A6340]" />
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Ficha Detalhada do Pet</h3>
+                    <p className="text-[11px] text-slate-500 font-medium">Visualização administrativa do animal no sistema</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedPetDetail(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer border border-transparent"
+                  title="Fechar"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                {/* Visual Top row: images & primary details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Photo Section with support for multiple photos */}
+                  <div className="space-y-3">
+                    <div className="w-full h-64 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      <img
+                        src={selectedPetDetail.photos[selectedPetDetail.primaryPhotoIndex] || selectedPetDetail.photos[0] || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=600'}
+                        alt={selectedPetDetail.name}
+                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-all duration-200"
+                      />
+                    </div>
+                    {/* Other photos row */}
+                    {selectedPetDetail.photos.length > 1 && (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPetDetail.photos.map((ph, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`w-14 h-14 rounded-lg overflow-hidden border-2 bg-slate-50 cursor-pointer transition-all ${
+                              idx === selectedPetDetail.primaryPhotoIndex ? 'border-[#5A6340]' : 'border-slate-200'
+                            }`}
+                          >
+                            <img
+                              src={ph}
+                              alt=""
+                              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-all duration-200"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* General attributes */}
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-900 leading-none">{selectedPetDetail.name}</h2>
+                      <span className="text-xs font-semibold text-slate-500 block mt-1">Status: 
+                        <span className={`ml-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          selectedPetDetail.status === 'Disponível' ? 'bg-emerald-100 text-emerald-800' :
+                          selectedPetDetail.status === 'Em análise' ? 'bg-amber-100 text-amber-800' :
+                          selectedPetDetail.status === 'Reservado' ? 'bg-indigo-100 text-indigo-800' :
+                          selectedPetDetail.status === 'Adotado' ? 'bg-indigo-950 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {selectedPetDetail.status}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <div>
+                        <span className="text-slate-400 block font-medium">Espécie / Sexo:</span>
+                        <span className="font-bold text-slate-800">{selectedPetDetail.species} • {selectedPetDetail.gender}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Idade aproximada:</span>
+                        <span className="font-bold text-slate-800">{selectedPetDetail.ageApprox}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Porte / Pelagem:</span>
+                        <span className="font-bold text-slate-800">Porte {selectedPetDetail.size} • {selectedPetDetail.color}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Cidade de Resgate:</span>
+                        <span className="font-bold text-slate-800">{selectedPetDetail.city}</span>
+                      </div>
+                    </div>
+
+                    {/* Compatibility */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                      <div className="p-2 bg-[#FDFCF0] border border-[#E0DBC1]/50 rounded-lg">
+                        <strong>Aceita outros animais?</strong> {selectedPetDetail.compatOtherAnimals}
+                      </div>
+                      <div className="p-2 bg-[#FDFCF0] border border-[#E0DBC1]/50 rounded-lg">
+                        <strong>Compatível com crianças?</strong> {selectedPetDetail.compatChildren}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Health parameters */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Histórico de Saúde</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${selectedPetDetail.castrated ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-400'}`}>
+                      {selectedPetDetail.castrated ? '✓ Castrado' : '✗ Não castrado'}
+                      {selectedPetDetail.castrationDate && ` (${selectedPetDetail.castrationDate})`}
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${selectedPetDetail.vaccinated ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-400'}`}>
+                      {selectedPetDetail.vaccinated ? '✓ Vacinado' : '✗ Não vacinado'}
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${selectedPetDetail.dewormed ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-400'}`}>
+                      {selectedPetDetail.dewormed ? '✓ Vermifugado' : '✗ Não vermifugado'}
+                    </span>
+                    <span className={`px-2.5 py-1 rounded-xl text-xs font-bold ${selectedPetDetail.needsTreatment ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-400'}`}>
+                      {selectedPetDetail.needsTreatment ? '⚠ Tratamento Ativo' : '✓ Saudável / Sem tratamento'}
+                    </span>
+                  </div>
+
+                  {selectedPetDetail.treatmentNotes && (
+                    <p className="text-xs bg-amber-50 border border-amber-100 p-2.5 rounded-lg text-amber-800 leading-relaxed">
+                      <strong>Observações de Tratamento:</strong> {selectedPetDetail.treatmentNotes}
+                    </p>
+                  )}
+                  {selectedPetDetail.specialNeeds && (
+                    <p className="text-xs bg-red-50 border border-red-100 p-2.5 rounded-lg text-red-800 leading-relaxed">
+                      <strong>Necessidades Especiais:</strong> {selectedPetDetail.specialNeeds}
+                    </p>
+                  )}
+                </div>
+
+                {/* Story and temperament */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                    <span className="font-bold text-slate-700 block">História do Resgate:</span>
+                    <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{selectedPetDetail.story || 'Nenhuma história cadastrada.'}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                    <span className="font-bold text-slate-700 block">Temperamento:</span>
+                    <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{selectedPetDetail.temperament || 'Não especificado.'}</p>
+                  </div>
+                </div>
+
+                {/* LT (Lar temporário) association & Donor info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 bg-[#FDFCF0] border border-[#E0DBC1]/60 rounded-xl space-y-1.5">
+                    <span className="font-bold text-[#5A6340] block">Lar Temporário Vinculado:</span>
+                    {selectedPetDetail.temporaryHomeId === 'none' ? (
+                      <p className="text-slate-500 italic">Resgatado particular, sem LT associado.</p>
+                    ) : (
+                      <div>
+                        {(() => {
+                          const lt = allTemporaryHomes.find(h => h.id === selectedPetDetail.temporaryHomeId);
+                          return lt ? (
+                            <div className="space-y-0.5">
+                              <p className="font-semibold text-slate-800">{lt.name}</p>
+                              <p className="text-slate-500 font-mono text-[10px]">Contato: {lt.contact}</p>
+                              {lt.notes && <p className="text-slate-400 text-[10px] mt-1 italic">{lt.notes}</p>}
+                            </div>
+                          ) : (
+                            <p className="text-slate-500">LT não encontrado ou removido.</p>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-[#F5F2E1] border border-[#E0DBC1]/80 rounded-xl space-y-1.5">
+                    <span className="font-bold text-[#5A6340] block">Informações do Doador / Protetor:</span>
+                    {selectedPetDetail.donorId ? (
+                      <div>
+                        {(() => {
+                          const linkedUser = users.find(u => u.id === selectedPetDetail.donorId);
+                          return linkedUser ? (
+                            <div className="space-y-0.5">
+                              <p 
+                                className="font-semibold text-[#5A6340] cursor-pointer hover:underline flex items-center gap-1 font-bold"
+                                onClick={() => {
+                                  setSelectedUserDetail(linkedUser);
+                                  setSelectedPetDetail(null);
+                                }}
+                              >
+                                {linkedUser.name} <span className="text-[9px] bg-[#5A6340]/10 text-[#5A6340] px-1.5 py-0.5 rounded font-normal">Ver Perfil</span>
+                              </p>
+                              <p className="text-slate-500 font-mono text-[10px]">{linkedUser.email} {linkedUser.phone && `• ${linkedUser.phone}`}</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-semibold text-slate-800">{selectedPetDetail.donorInfo?.name || 'Não informado'}</p>
+                              <p className="text-slate-500 font-mono text-[10px]">{selectedPetDetail.donorInfo?.email} {selectedPetDetail.donorInfo?.phone && `• ${selectedPetDetail.donorInfo?.phone}`}</p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="font-semibold text-slate-800">{selectedPetDetail.donorInfo?.name || 'Não informado'}</p>
+                        <p className="text-slate-500 font-mono text-[10px]">{selectedPetDetail.donorInfo?.email} {selectedPetDetail.donorInfo?.phone && `• ${selectedPetDetail.donorInfo?.phone}`}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-150 bg-slate-50 flex justify-between">
+                <button
+                  onClick={() => {
+                    setEditingPet(selectedPetDetail);
+                    setSelectedPetDetail(null);
+                  }}
+                  className="px-4 py-2 bg-[#5A6340] hover:bg-[#4E5637] text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Editar Informações do Pet
+                </button>
+                <button
+                  onClick={() => setSelectedPetDetail(null)}
+                  className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Fechar Ficha
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* USER DETAIL MODAL FOR ADMINS */}
+      <AnimatePresence>
+        {selectedUserDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-slate-150 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-[#5A6340]" />
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Perfil Completo do Usuário</h3>
+                    <p className="text-[11px] text-slate-500 font-medium">Informações de doador, tutor ou lar temporário</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedUserDetail(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer border border-transparent"
+                  title="Fechar"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                {/* Profile Top Info block */}
+                <div className="flex flex-col sm:flex-row items-center gap-4 pb-6 border-b border-slate-100">
+                  {selectedUserDetail.profilePhotoUrl ? (
+                    <img
+                      src={selectedUserDetail.profilePhotoUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 shadow-inner cursor-pointer hover:scale-105 transition-all duration-200 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-[#5A6340]/10 text-[#5A6340] font-bold flex items-center justify-center text-xl border border-slate-200 shrink-0 uppercase">
+                      {selectedUserDetail.name.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+
+                  <div className="text-center sm:text-left space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+                      <h2 className="text-xl font-bold text-slate-950">{selectedUserDetail.name}</h2>
+                      {selectedUserDetail.flaggedAttention && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                          <AlertCircle className="w-3 h-3" /> Atenção Necessária
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 font-mono">{selectedUserDetail.email} {selectedUserDetail.phone && `• ${selectedUserDetail.phone}`}</p>
+                    <div className="flex gap-2 justify-center sm:justify-start pt-1">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#5A6340]/10 text-[#5A6340]">
+                        Papel: {selectedUserDetail.role || 'Doador'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 font-mono">
+                        Cadastrado em {new Date(selectedUserDetail.createdAt || Date.now()).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* House & Structure details (if applicable) */}
+                {(selectedUserDetail.city || selectedUserDetail.housingType || selectedUserDetail.backyard) && (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estrutura Residencial & Condições</h4>
+                    <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <div>
+                        <span className="text-slate-400 block font-medium">Cidade / Bairro:</span>
+                        <span className="font-bold text-slate-800">
+                          {selectedUserDetail.city || 'Não especificado'} {selectedUserDetail.neighborhood && `/ ${selectedUserDetail.neighborhood}`}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Tipo de Residência:</span>
+                        <span className="font-bold text-slate-800">
+                          {selectedUserDetail.housingType || 'Não informado'} {selectedUserDetail.tenure && `(${selectedUserDetail.tenure})`}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Possui Quintal:</span>
+                        <span className="font-bold text-slate-800">{selectedUserDetail.backyard || 'Não especificado'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Quintal Fechado (Muros/Cercas):</span>
+                        <span className="font-bold text-slate-800">{selectedUserDetail.isWalledOrFenced || 'Não informado'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Companion info */}
+                <div className="space-y-3 text-xs">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Histórico com Animais</h4>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
+                    <p><strong>Já teve outros animais?</strong> {selectedUserDetail.hadPets || 'Não informado'}</p>
+                    <p><strong>Animais atuais na residência:</strong> {selectedUserDetail.otherAnimalsCount !== undefined ? selectedUserDetail.otherAnimalsCount : 'Não informado'} {selectedUserDetail.otherAnimalsDetails && `(${selectedUserDetail.otherAnimalsDetails})`}</p>
+                    {selectedUserDetail.motivation && (
+                      <div className="pt-2 border-t border-slate-200">
+                        <strong className="block text-slate-500 mb-1">Motivação para adotar:</strong>
+                        <p className="text-slate-600 leading-relaxed font-sans">{selectedUserDetail.motivation}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Backoffice Custom Tags & Notes */}
+                <div className="space-y-3 text-xs">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Painel Administrativo Interno</h4>
+                  <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100 space-y-2.5">
+                    <div>
+                      <span className="text-slate-500 block font-semibold">Observações internas dos admins:</span>
+                      <p className="text-slate-700 italic font-sans leading-relaxed mt-0.5 whitespace-pre-wrap">
+                        {selectedUserDetail.adminDescription || 'Nenhuma nota interna registrada pelos administradores.'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-500 block font-semibold mb-1">Tags cadastradas:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedUserDetail.customTags && selectedUserDetail.customTags.length > 0 ? (
+                          selectedUserDetail.customTags.map(tag => (
+                            <span key={tag} className="bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-lg text-[10px] font-bold">
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-400 italic">Nenhuma tag cadastrada.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Linked pets list */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pets Cadastrados por este Usuário</h4>
+                  {pets.filter(p => p.donorId === selectedUserDetail.id).length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Nenhum pet cadastrado sob a tutela deste usuário.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {pets.filter(p => p.donorId === selectedUserDetail.id).map(p => (
+                        <div 
+                          key={p.id}
+                          className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 hover:border-[#5A6340] cursor-pointer flex items-center gap-3 transition-all"
+                          onClick={() => {
+                            setSelectedPetDetail(p);
+                            setSelectedUserDetail(null);
+                          }}
+                        >
+                          <img
+                            src={p.photos[0] || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=100'}
+                            alt=""
+                            className="w-10 h-10 rounded-lg object-cover border border-slate-200 hover:scale-105 transition-all duration-200 cursor-pointer"
+                          />
+                          <div className="overflow-hidden">
+                            <span className="font-bold text-slate-800 text-xs block truncate hover:underline">{p.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono block">{p.species} • {p.city}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-150 bg-slate-50 flex justify-between">
+                <button
+                  onClick={() => {
+                    toggleExpandUser(selectedUserDetail);
+                    setSelectedUserDetail(null);
+                    setActiveTab('reports'); // Move to user listing tab
+                  }}
+                  className="px-4 py-2 bg-[#5A6340] hover:bg-[#4E5637] text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Abrir Painel de Gestão do Usuário
+                </button>
+                <button
+                  onClick={() => setSelectedUserDetail(null)}
+                  className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  Fechar Perfil
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
