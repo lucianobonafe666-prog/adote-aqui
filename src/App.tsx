@@ -885,6 +885,7 @@ export default function App() {
                   onUpdateTemporaryHomes={setTemporaryHomes}
                   onUpdateFollowUps={setFollowUps}
                   onUpdateUsers={setUsers}
+                  onZoomImage={setZoomedImage}
                 />
               )}
             </motion.div>

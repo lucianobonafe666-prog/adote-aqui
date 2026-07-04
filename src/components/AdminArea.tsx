@@ -55,6 +55,7 @@ interface AdminAreaProps {
   onUpdateTemporaryHomes: (homes: TemporaryHome[]) => void;
   onUpdateFollowUps: (fups: FollowUp[]) => void;
   onUpdateUsers?: (users: DonorUser[]) => void;
+  onZoomImage?: (imgUrl: string) => void;
 }
 
 export default function AdminArea({
@@ -67,7 +68,8 @@ export default function AdminArea({
   onUpdateCandidates,
   onUpdateTemporaryHomes,
   onUpdateFollowUps,
-  onUpdateUsers
+  onUpdateUsers,
+  onZoomImage
 }: AdminAreaProps) {
   // Treat all users who make a pet available for adoption (p.donorId matches user.id) as temporary homes too!
   const usersWithPets = (users || []).filter(u => pets.some(p => p.donorId === u.id));
@@ -2597,7 +2599,14 @@ export default function AdminArea({
                       {f.photosReceived.length > 0 && (
                         <div className="mt-3 grid grid-cols-3 gap-2">
                           {f.photosReceived.map((ph, i) => (
-                            <img key={i} src={ph} alt="" referrerPolicy="no-referrer" className="w-full h-16 rounded-lg object-cover border border-slate-200" />
+                            <img
+                              key={i}
+                              src={ph}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="w-full h-16 rounded-lg object-cover border border-slate-200 cursor-pointer hover:scale-[1.03] hover:border-slate-300 transition-all duration-200"
+                              onClick={() => onZoomImage?.(ph)}
+                            />
                           ))}
                         </div>
                       )}
@@ -2838,6 +2847,7 @@ export default function AdminArea({
                         src={selectedPetDetail.photos[selectedPetDetail.primaryPhotoIndex] || selectedPetDetail.photos[0] || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=600'}
                         alt={selectedPetDetail.name}
                         className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-all duration-200"
+                        onClick={() => onZoomImage?.(selectedPetDetail.photos[selectedPetDetail.primaryPhotoIndex] || selectedPetDetail.photos[0] || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=600')}
                       />
                     </div>
                     {/* Other photos row */}
@@ -2854,6 +2864,7 @@ export default function AdminArea({
                               src={ph}
                               alt=""
                               className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-all duration-200"
+                              onClick={() => onZoomImage?.(ph)}
                             />
                           </div>
                         ))}
@@ -3076,6 +3087,7 @@ export default function AdminArea({
                       alt=""
                       referrerPolicy="no-referrer"
                       className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 shadow-inner cursor-pointer hover:scale-105 transition-all duration-200 shrink-0"
+                      onClick={() => onZoomImage?.(selectedUserDetail.profilePhotoUrl!)}
                     />
                   ) : (
                     <div className="w-16 h-16 rounded-full bg-[#5A6340]/10 text-[#5A6340] font-bold flex items-center justify-center text-xl border border-slate-200 shrink-0 uppercase">
